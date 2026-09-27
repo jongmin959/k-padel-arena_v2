@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Trophy,
@@ -368,7 +366,7 @@ function generateMexicanoRound(players, existingRounds, courtCount) {
 /* ---------------------------------------------------------
    작은 UI 조각들
 --------------------------------------------------------- */
-function Eyebrow({ children }) {
+function Eyebrow({ children, color }) {
   return (
     <div
       style={{
@@ -376,7 +374,7 @@ function Eyebrow({ children }) {
         letterSpacing: "0.18em",
         fontSize: 11,
         fontWeight: 600,
-        color: C.ball,
+        color: color || C.ball,
         textTransform: "uppercase",
       }}
     >
@@ -646,14 +644,11 @@ export default function PadelLeagueApp() {
       } catch (e) {
         // no members yet
       }
-      // "Who am I on this device" is deliberately local-only — it must
-      // never be written through the shared backend, or one person
-      // logging in would switch the identity for every visitor.
       try {
-        const localId = window.localStorage?.getItem(CURRENT_MEMBER_KEY);
-        if (localId) setCurrentMemberId(localId);
+        const res2 = await window.storage.get(CURRENT_MEMBER_KEY, false);
+        if (res2 && res2.value) setCurrentMemberId(res2.value);
       } catch (e) {
-        // localStorage unavailable; stays logged out
+        // not logged in yet
       }
     })();
   }, []);
@@ -725,7 +720,7 @@ export default function PadelLeagueApp() {
   const loginAs = useCallback(async (memberId) => {
     setCurrentMemberId(memberId);
     try {
-      window.localStorage?.setItem(CURRENT_MEMBER_KEY, memberId);
+      await window.storage.set(CURRENT_MEMBER_KEY, memberId, false);
     } catch (e) {
       // best effort
     }
@@ -734,7 +729,7 @@ export default function PadelLeagueApp() {
   const logout = useCallback(async () => {
     setCurrentMemberId(null);
     try {
-      window.localStorage?.removeItem(CURRENT_MEMBER_KEY);
+      await window.storage.set(CURRENT_MEMBER_KEY, "", false);
     } catch (e) {
       // best effort
     }
@@ -2149,7 +2144,7 @@ function BookingTab({
       )}
 
       <SectionCard>
-        <Eyebrow>편의시설</Eyebrow>
+        <Eyebrow color={C.charcoal}>편의시설</Eyebrow>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
           {AMENITIES.map((a) => {
             const active = !!venueAmenities?.[league.venue]?.[a.key];
@@ -2177,7 +2172,7 @@ function BookingTab({
       </SectionCard>
 
       <SectionCard>
-        <Eyebrow>날짜 선택</Eyebrow>
+        <Eyebrow color={C.charcoal}>날짜 선택</Eyebrow>
         <div style={{ display: "flex", gap: 8, marginTop: 12, overflowX: "auto", paddingBottom: 4 }}>
           {days.map((d) => (
             <button
