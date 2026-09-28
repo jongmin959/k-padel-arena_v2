@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Trophy,
@@ -15,6 +17,7 @@ import {
   Trash2,
   UserCircle,
   LogOut,
+  Share2,
 } from "lucide-react";
 
 /* ---------------------------------------------------------
@@ -62,6 +65,21 @@ const CATEGORIES = [
   { key: "lesson", label: "레슨", color: "#E4574B" },
 ];
 const categoryOf = (key) => CATEGORIES.find((c) => c.key === key) || CATEGORIES[0];
+
+const REGIONS = [
+  "서울", "인천", "경기도", "부산", "대구", "광주", "대전", "울산", "세종",
+  "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주",
+];
+
+/* One-way hash so a member's password isn't stored as plain text.
+   This is a lightweight club-app safeguard, not bank-grade security. */
+async function hashPassword(text) {
+  const enc = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 const AMENITIES = [
   { key: "parking", label: "주차" },
@@ -592,6 +610,7 @@ export default function PadelLeagueApp() {
   const [members, setMembers] = useState([]);
   const [currentMemberId, setCurrentMemberId] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
   const [profileUploading, setProfileUploading] = useState(false);
 
   useEffect(() => {
@@ -645,10 +664,10 @@ export default function PadelLeagueApp() {
         // no members yet
       }
       try {
-        const res2 = await window.storage.get(CURRENT_MEMBER_KEY, false);
-        if (res2 && res2.value) setCurrentMemberId(res2.value);
+        const localId = window.localStorage?.getItem(CURRENT_MEMBER_KEY);
+        if (localId) setCurrentMemberId(localId);
       } catch (e) {
-        // not logged in yet
+        // localStorage unavailable; stays logged out
       }
     })();
   }, []);
@@ -720,7 +739,7 @@ export default function PadelLeagueApp() {
   const loginAs = useCallback(async (memberId) => {
     setCurrentMemberId(memberId);
     try {
-      await window.storage.set(CURRENT_MEMBER_KEY, memberId, false);
+      window.localStorage?.setItem(CURRENT_MEMBER_KEY, memberId);
     } catch (e) {
       // best effort
     }
@@ -729,20 +748,28 @@ export default function PadelLeagueApp() {
   const logout = useCallback(async () => {
     setCurrentMemberId(null);
     try {
-      await window.storage.set(CURRENT_MEMBER_KEY, "", false);
+      window.localStorage?.removeItem(CURRENT_MEMBER_KEY);
     } catch (e) {
       // best effort
     }
   }, []);
 
   const signUp = useCallback(
-    async ({ name, phone, email, gender, level, photo }) => {
+    async ({ name, username, password, phone, email, gender, region, level, photo }) => {
+      const normalizedUsername = (username || "").trim().toLowerCase();
+      if (members.some((m) => (m.username || "").toLowerCase() === normalizedUsername)) {
+        return { error: "duplicate_username" };
+      }
+      const passwordHash = await hashPassword(password);
       const member = {
         id: uid(),
         name,
+        username: normalizedUsername,
+        passwordHash,
         phone: phone || "",
         email: email || "",
         gender: gender || "",
+        region: region || "",
         level,
         photo: photo || null,
         createdAt: Date.now(),
@@ -756,6 +783,19 @@ export default function PadelLeagueApp() {
       return member;
     },
     [members, persistMembers, loginAs, league]
+  );
+
+  const loginWithPassword = useCallback(
+    async (username, password) => {
+      const normalizedUsername = (username || "").trim().toLowerCase();
+      const member = members.find((m) => (m.username || "").toLowerCase() === normalizedUsername);
+      if (!member) return { error: "not_found" };
+      const passwordHash = await hashPassword(password);
+      if (passwordHash !== member.passwordHash) return { error: "wrong_password" };
+      await loginAs(member.id);
+      return member;
+    },
+    [members, loginAs]
   );
 
   const updateProfilePhoto = useCallback(
@@ -796,6 +836,29 @@ export default function PadelLeagueApp() {
   );
 
   const currentMember = members.find((m) => m.id === currentMemberId) || null;
+
+  const handleShare = useCallback(async () => {
+    const shareData = {
+      title: "K-Padel Arena Manager",
+      text: "코트 예약 · 리그 · 순위를 한눈에 — K-Padel Arena Manager",
+      url: typeof window !== "undefined" ? window.location.href : "",
+    };
+    try {
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+    } catch (e) {
+      // user cancelled or share failed; fall through to copy-link
+    }
+    try {
+      await navigator.clipboard.writeText(shareData.url);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch (e) {
+      // clipboard unavailable; nothing more we can do silently
+    }
+  }, []);
 
   const [saveStatus, setSaveStatus] = useState("idle"); // idle | saving | saved | error
 
@@ -1033,6 +1096,26 @@ export default function PadelLeagueApp() {
                 }}
               />
               <SaveStatus status={saveStatus} />
+              <button
+                onClick={handleShare}
+                title="카카오톡·SNS로 공유하기"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  border: "1px solid rgba(255,255,255,0.25)",
+                  background: "transparent",
+                  color: shareCopied ? C.ball : "rgba(255,255,255,0.75)",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                <Share2 size={12} />
+                {shareCopied ? "링크 복사됨" : "공유"}
+              </button>
             </div>
           </div>
 
@@ -1084,16 +1167,19 @@ export default function PadelLeagueApp() {
               active={league.format === "americano"}
               onClick={() => setFormat("americano")}
               label="아메리카노 · 개인전"
+              tooltip="매 라운드 파트너가 바뀌며 모두와 한 번씩 게임해요. 개인 포인트 합산으로 순위를 매겨요."
             />
             <FormatPill
               active={league.format === "mexicano"}
               onClick={() => setFormat("mexicano")}
               label="멕시카노 · 개인전"
+              tooltip="라운드마다 현재 순위를 기준으로 짝을 다시 맞춰요 (1위+4위 vs 2위+3위). 실력 차가 나도 접전이 되도록 유도해요."
             />
             <FormatPill
               active={league.format === "round_robin"}
               onClick={() => setFormat("round_robin")}
               label="라운드로빈 · 팀전"
+              tooltip="처음에 정한 고정 팀끼리 서로 한 번씩 맞붙는 리그전 방식이에요."
             />
             <CourtStepper
               value={league.courtCount}
@@ -1270,7 +1356,7 @@ export default function PadelLeagueApp() {
         <AuthModal
           members={members}
           currentMember={currentMember}
-          onLogin={loginAs}
+          onLoginWithPassword={loginWithPassword}
           onLogout={logout}
           onSignUp={signUp}
           onUploadProfilePhoto={updateProfilePhoto}
@@ -1457,7 +1543,7 @@ function LevelSlider({ value, onChange }) {
 function AuthModal({
   members,
   currentMember,
-  onLogin,
+  onLoginWithPassword,
   onLogout,
   onSignUp,
   onUploadProfilePhoto,
@@ -1468,17 +1554,71 @@ function AuthModal({
 }) {
   const [mode, setMode] = useState(currentMember ? "profile" : members.length ? "login" : "signup");
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [gender, setGender] = useState("");
+  const [region, setRegion] = useState("");
   const [level, setLevel] = useState(3.0);
   const [signupPhoto, setSignupPhoto] = useState(null);
+  const [signupError, setSignupError] = useState("");
+
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [loginBusy, setLoginBusy] = useState(false);
 
   const submitSignUp = async () => {
     const trimmed = name.trim();
+    const trimmedUsername = username.trim();
+    setSignupError("");
     if (!trimmed) return;
-    await onSignUp({ name: trimmed, phone, email, gender, level, photo: signupPhoto });
+    if (!trimmedUsername) {
+      setSignupError("아이디를 입력해 주세요.");
+      return;
+    }
+    if (password.length < 4) {
+      setSignupError("비밀번호는 4자 이상으로 입력해 주세요.");
+      return;
+    }
+    if (password !== passwordConfirm) {
+      setSignupError("비밀번호가 일치하지 않아요.");
+      return;
+    }
+    const result = await onSignUp({
+      name: trimmed,
+      username: trimmedUsername,
+      password,
+      phone,
+      email,
+      gender,
+      region,
+      level,
+      photo: signupPhoto,
+    });
+    if (result && result.error === "duplicate_username") {
+      setSignupError("이미 사용 중인 아이디예요.");
+      return;
+    }
     setMode("profile");
+  };
+
+  const submitLogin = async () => {
+    setLoginError("");
+    if (!loginUsername.trim() || !loginPassword) {
+      setLoginError("아이디와 비밀번호를 입력해 주세요.");
+      return;
+    }
+    setLoginBusy(true);
+    const result = await onLoginWithPassword(loginUsername, loginPassword);
+    setLoginBusy(false);
+    if (result && result.error) {
+      setLoginError("아이디 또는 비밀번호가 올바르지 않아요.");
+      return;
+    }
+    onClose();
   };
 
   return (
@@ -1581,36 +1721,27 @@ function AuthModal({
             {members.length === 0 ? (
               <EmptyHint text="등록된 회원이 없어요. 먼저 회원가입을 해주세요." />
             ) : (
-              members.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => {
-                    onLogin(m.id);
-                    onClose();
-                  }}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "1px solid rgba(0,0,0,0.1)",
-                    background: "transparent",
-                    cursor: "pointer",
-                    textAlign: "left",
-                  }}
-                >
-                  {m.photo ? (
-                    <img src={m.photo} alt={m.name} style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover" }} />
-                  ) : (
-                    <UserCircle size={28} color="rgba(27,36,34,0.4)" />
-                  )}
-                  <span style={{ fontWeight: 600, fontSize: 14 }}>{m.name}</span>
-                  <span style={{ marginLeft: "auto", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "rgba(27,36,34,0.5)" }}>
-                    Lv.{m.level.toFixed(1)}
-                  </span>
-                </button>
-              ))
+              <>
+                <input
+                  value={loginUsername}
+                  onChange={(e) => setLoginUsername(e.target.value)}
+                  placeholder="아이디"
+                  autoCapitalize="off"
+                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)", fontSize: 14 }}
+                />
+                <input
+                  type="password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="비밀번호"
+                  onKeyDown={(e) => e.key === "Enter" && submitLogin()}
+                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)", fontSize: 14 }}
+                />
+                {loginError && <div style={{ fontSize: 12, color: C.danger }}>{loginError}</div>}
+                <PrimaryButton onClick={submitLogin} disabled={loginBusy}>
+                  {loginBusy ? "확인 중..." : "로그인"}
+                </PrimaryButton>
+              </>
             )}
             <button
               onClick={() => setMode("signup")}
@@ -1662,6 +1793,37 @@ function AuthModal({
               placeholder="이름"
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)", fontSize: 14 }}
             />
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="아이디"
+              autoCapitalize="off"
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)", fontSize: 14 }}
+            />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="비밀번호 (4자 이상)"
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)", fontSize: 14 }}
+            />
+            <input
+              type="password"
+              value={passwordConfirm}
+              onChange={(e) => setPasswordConfirm(e.target.value)}
+              placeholder="비밀번호 확인"
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)", fontSize: 14 }}
+            />
+            <select
+              value={region}
+              onChange={(e) => setRegion(e.target.value)}
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)", fontSize: 14, color: region ? C.charcoal : "rgba(27,36,34,0.4)" }}
+            >
+              <option value="">지역 선택 (선택)</option>
+              {REGIONS.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
             <div style={{ display: "flex", gap: 6 }}>
               {[
                 { key: "male", label: "Male" },
@@ -1702,7 +1864,9 @@ function AuthModal({
             />
             <LevelSlider value={level} onChange={setLevel} />
 
-            <PrimaryButton onClick={submitSignUp} icon={UserPlus} disabled={!name.trim()}>
+            {signupError && <div style={{ fontSize: 12, color: C.danger }}>{signupError}</div>}
+
+            <PrimaryButton onClick={submitSignUp} icon={UserPlus} disabled={!name.trim() || !username.trim() || password.length < 4}>
               가입하기
             </PrimaryButton>
             {members.length > 0 && (
@@ -1871,10 +2035,11 @@ function SaveStatus({ status }) {
   );
 }
 
-function FormatPill({ active, onClick, label }) {
+function FormatPill({ active, onClick, label, tooltip }) {
   return (
     <button
       onClick={onClick}
+      title={tooltip}
       style={{
         padding: "7px 12px",
         borderRadius: 999,
@@ -2172,7 +2337,7 @@ function BookingTab({
       </SectionCard>
 
       <SectionCard>
-        <Eyebrow color={C.charcoal}>날짜 선택</Eyebrow>
+        <Eyebrow color={C.charcoal}>날짜선택</Eyebrow>
         <div style={{ display: "flex", gap: 8, marginTop: 12, overflowX: "auto", paddingBottom: 4 }}>
           {days.map((d) => (
             <button
