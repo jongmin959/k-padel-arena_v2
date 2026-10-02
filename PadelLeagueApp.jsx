@@ -19,6 +19,36 @@ import {
   LogOut,
   Share2,
 } from "lucide-react";
+import { supabase } from "./lib/supabaseClient";
+import { signUpWithUsername, signInWithUsername, signOut, getCurrentProfile } from "./lib/auth";
+import {
+  getMyClub,
+  createClub,
+  updateClub,
+  getClubPlayers,
+  addGuestPlayer,
+  removeClubMember,
+  joinClubAsPlayer,
+  getRounds,
+  replaceAllRounds,
+  appendRound,
+  removeLastRound,
+  updateMatchScore,
+  clearAllMatches,
+  getBookings,
+  createBookingGroup,
+  joinBookingGroup,
+  removeBookingParticipant,
+  uploadClubPhoto,
+  setClubPhotoUrl,
+  uploadResultPhoto as uploadResultPhotoToStorage,
+  setResultPhotoUrl,
+  uploadAvatar,
+  setAvatarUrl,
+  updateProfileLevel as updateProfileLevelInDb,
+  subscribeToClub,
+} from "./lib/db";
+
 
 /* ---------------------------------------------------------
    토큰 — 파델 코트의 소재를 그대로 색과 타이포에 옮김
@@ -49,9 +79,6 @@ const uid = () =>
 
 const BRAND_LOGO = "data:image/jpeg;base64,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";
 
-const STORAGE_KEY = "padel-league-active-v1";
-const MEMBERS_KEY = "padel-members-v1";
-const CURRENT_MEMBER_KEY = "padel-current-member-v1";
 const LEVEL_MIN = 0;
 const LEVEL_MAX = 7;
 const LEVEL_STEP = 0.1;
@@ -71,16 +98,6 @@ const REGIONS = [
   "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주",
 ];
 
-/* One-way hash so a member's password isn't stored as plain text.
-   This is a lightweight club-app safeguard, not bank-grade security. */
-async function hashPassword(text) {
-  const enc = new TextEncoder().encode(text);
-  const buf = await crypto.subtle.digest("SHA-256", enc);
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
 const AMENITIES = [
   { key: "parking", label: "주차" },
   { key: "lockerRoom", label: "탈의실" },
@@ -89,100 +106,6 @@ const AMENITIES = [
   { key: "racketRental", label: "라켓대여" },
   { key: "wifi", label: "와이파이" },
 ];
-
-function venueAmenitiesKey(venue) {
-  return `padel-venue-amenities:${venue}`;
-}
-
-function venuePhotoKey(venue) {
-  return `padel-venue-photo:${venue}`;
-}
-
-/* Retries a storage write a few times with a short backoff before
-   giving up — smooths over transient failures so "add a photo" reliably
-   ends in a save instead of a one-shot attempt. */
-async function storageSetWithRetry(key, value, attempts = 3) {
-  for (let i = 0; i < attempts; i++) {
-    try {
-      const res = await window.storage.set(key, value, false);
-      if (res) return res;
-    } catch (e) {
-      // fall through to retry
-    }
-    if (i < attempts - 1) {
-      await new Promise((r) => setTimeout(r, 350 * (i + 1)));
-    }
-  }
-  return null;
-}
-
-/* Shrinks an image aggressively so it fits in storage.
-   Never rejects: if canvas processing fails for any reason, it falls
-   back to the raw data URL so the photo still shows on screen. */
-function resizeImageFile(file, maxWidth = 900, quality = 0.75) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error || new Error("파일을 읽지 못했습니다"));
-    reader.onload = () => {
-      const raw = reader.result;
-      const img = new Image();
-      img.onerror = () => resolve(raw); // can't decode? hand back the original
-      img.onload = () => {
-        try {
-          const scale = Math.min(1, maxWidth / img.width);
-          const w = Math.max(1, Math.round(img.width * scale));
-          const h = Math.max(1, Math.round(img.height * scale));
-          const canvas = document.createElement("canvas");
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) return resolve(raw);
-          ctx.drawImage(img, 0, 0, w, h);
-          let out = canvas.toDataURL("image/jpeg", quality);
-          // keep shrinking until it comfortably fits the storage limit
-          let q = quality;
-          let width = w;
-          while (out.length > 1_200_000 && (q > 0.35 || width > 300)) {
-            if (q > 0.35) q -= 0.15;
-            else {
-              width = Math.round(width * 0.7);
-              const c2 = document.createElement("canvas");
-              c2.width = width;
-              c2.height = Math.round((h / w) * width);
-              const x2 = c2.getContext("2d");
-              if (!x2) break;
-              x2.drawImage(img, 0, 0, c2.width, c2.height);
-              out = c2.toDataURL("image/jpeg", q);
-              continue;
-            }
-            out = canvas.toDataURL("image/jpeg", q);
-          }
-          resolve(out);
-        } catch (e) {
-          resolve(raw);
-        }
-      };
-      img.src = raw;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function defaultLeague() {
-  return {
-    id: uid(),
-    name: "새 리그",
-    venue: VENUES[0],
-    format: "americano", // 'americano' | 'mexicano' | 'round_robin'
-    courtCount: 2,
-    players: [],
-    teams: [],
-    rounds: [],
-    bookings: [],
-    resultPhoto: null,
-    createdAt: Date.now(),
-  };
-}
 
 const BOOKING_SLOTS_PER_MATCH = 4;
 
@@ -600,122 +523,163 @@ export default function PadelLeagueApp() {
   const [league, setLeague] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saveError, setSaveError] = useState(false);
+  const [saveStatus, setSaveStatus] = useState("idle"); // idle | saving | saved | error
   const [tab, setTab] = useState("booking");
   const [newPlayerName, setNewPlayerName] = useState("");
   const [numRounds, setNumRounds] = useState(5);
   const [editingName, setEditingName] = useState(false);
-  const [venuePhotos, setVenuePhotos] = useState({});
-  const [venueAmenities, setVenueAmenities] = useState({});
   const [photoUploading, setPhotoUploading] = useState(false);
-  const [members, setMembers] = useState([]);
-  const [currentMemberId, setCurrentMemberId] = useState(null);
+  const [photoError, setPhotoError] = useState("");
+  const [resultPhotoUploading, setResultPhotoUploading] = useState(false);
+  const [currentMember, setCurrentMember] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const [profileUploading, setProfileUploading] = useState(false);
+  const [authNotice, setAuthNotice] = useState("");
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await window.storage.get(STORAGE_KEY, false);
-        if (res && res.value) {
-          const parsed = JSON.parse(res.value);
-          setLeague({ venue: VENUES[0], bookings: [], resultPhoto: null, ...parsed });
-        } else {
-          setLeague(defaultLeague());
-        }
-      } catch (e) {
-        setLeague(defaultLeague());
-      } finally {
-        setLoading(false);
-      }
-    })();
+  const mapProfile = (row) =>
+    row && {
+      id: row.id,
+      name: row.display_name,
+      username: row.username,
+      level: row.level ?? 3,
+      photo: row.photo_url,
+      region: row.region,
+      email: row.email,
+      phone: row.phone,
+      gender: row.gender,
+    };
 
-    (async () => {
-      const photos = {};
-      for (const v of VENUES) {
-        try {
-          const res = await window.storage.get(venuePhotoKey(v), false);
-          if (res && res.value) photos[v] = res.value;
-        } catch (e) {
-          // no photo saved yet for this venue
-        }
-      }
-      setVenuePhotos(photos);
-    })();
+  const assembleLeague = (club, players, rounds, bookings) => ({
+    id: club.id,
+    name: club.name,
+    venue: club.venue,
+    format: club.format,
+    courtCount: club.court_count,
+    amenities: club.amenities || {},
+    photo: club.photo_url,
+    resultPhoto: club.result_photo_url,
+    ownerId: club.owner_id,
+    players,
+    teams: [], // round-robin pairing preview — session-local only, see README
+    rounds,
+    bookings,
+    createdAt: club.created_at,
+  });
 
-    (async () => {
-      const amenities = {};
-      for (const v of VENUES) {
-        try {
-          const res = await window.storage.get(venueAmenitiesKey(v), false);
-          if (res && res.value) amenities[v] = JSON.parse(res.value);
-        } catch (e) {
-          // no amenities saved yet for this venue
-        }
-      }
-      setVenueAmenities(amenities);
-    })();
-
-    (async () => {
-      try {
-        const res = await window.storage.get(MEMBERS_KEY, false);
-        if (res && res.value) setMembers(JSON.parse(res.value));
-      } catch (e) {
-        // no members yet
-      }
-      try {
-        const localId = window.localStorage?.getItem(CURRENT_MEMBER_KEY);
-        if (localId) setCurrentMemberId(localId);
-      } catch (e) {
-        // localStorage unavailable; stays logged out
-      }
-    })();
+  const reloadClubData = useCallback(async (clubId) => {
+    const [players, rounds, bookings] = await Promise.all([getClubPlayers(clubId), getRounds(clubId), getBookings(clubId)]);
+    const { data: club } = await supabase.from("clubs").select("*").eq("id", clubId).single();
+    if (club) setLeague((prev) => assembleLeague(club, players, rounds, bookings));
   }, []);
 
-  const [photoError, setPhotoError] = useState("");
-
-  const uploadVenuePhoto = useCallback(async (venue, file) => {
-    setPhotoUploading(true);
-    setPhotoError("");
+  const loadEverything = useCallback(async () => {
+    setLoading(true);
     try {
-      const dataUrl = await resizeImageFile(file);
-      // Show it right away — display must not depend on the save succeeding.
-      setVenuePhotos((prev) => ({ ...prev, [venue]: dataUrl }));
-      const res = await storageSetWithRetry(venuePhotoKey(venue), dataUrl);
-      if (!res) setPhotoError("사진은 표시되지만 저장에 실패했어요. 새로고침하면 사라질 수 있어요.");
+      const profile = await getCurrentProfile();
+      setCurrentMember(mapProfile(profile));
+
+      let club = null;
+      if (profile) {
+        club = await getMyClub(profile.id);
+        if (!club) club = await createClub(profile.id, { venue: VENUES[0] });
+      } else {
+        const { data } = await supabase.from("clubs").select("*").order("created_at", { ascending: true }).limit(1).maybeSingle();
+        club = data || null;
+      }
+
+      if (club) {
+        const [players, rounds, bookings] = await Promise.all([
+          getClubPlayers(club.id),
+          getRounds(club.id),
+          getBookings(club.id),
+        ]);
+        setLeague(assembleLeague(club, players, rounds, bookings));
+      } else {
+        setLeague(null);
+      }
     } catch (e) {
-      setPhotoError("사진을 불러오지 못했어요. 다른 파일로 시도해 주세요.");
+      setLeague(null);
     } finally {
-      setPhotoUploading(false);
+      setLoading(false);
     }
   }, []);
 
-  const setVenuePhotoUrl = useCallback(async (venue, url) => {
-    setVenuePhotos((prev) => ({ ...prev, [venue]: url }));
-    await storageSetWithRetry(venuePhotoKey(venue), url);
-  }, []);
+  useEffect(() => {
+    loadEverything();
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      loadEverything();
+    });
+    return () => sub?.subscription?.unsubscribe();
+  }, [loadEverything]);
 
-  const toggleVenueAmenity = useCallback(
-    (venue, key) => {
-      const current = venueAmenities[venue] || {};
-      const next = { ...current, [key]: !current[key] };
-      setVenueAmenities((prev) => ({ ...prev, [venue]: next }));
-      storageSetWithRetry(venueAmenitiesKey(venue), JSON.stringify(next));
+  // Live sync: reflect other viewers' changes to this same club.
+  useEffect(() => {
+    if (!league?.id) return undefined;
+    const unsubscribe = subscribeToClub(league.id, () => reloadClubData(league.id));
+    return unsubscribe;
+  }, [league?.id, reloadClubData]);
+
+  /* ---------------------------------------------------------------
+     Photos — club banner, result photo, profile avatar
+  --------------------------------------------------------------- */
+  const uploadVenuePhoto = useCallback(
+    async (_venue, file) => {
+      if (!league) return;
+      setPhotoUploading(true);
+      setPhotoError("");
+      const previewUrl = URL.createObjectURL(file);
+      setLeague((prev) => ({ ...prev, photo: previewUrl }));
+      try {
+        const url = await uploadClubPhoto(league.id, file);
+        setLeague((prev) => ({ ...prev, photo: url }));
+      } catch (e) {
+        setPhotoError("사진 저장에 실패했어요. 권한이 있는 계정인지 확인해 주세요.");
+      } finally {
+        setPhotoUploading(false);
+      }
     },
-    [venueAmenities]
+    [league]
   );
 
-  const [resultPhotoUploading, setResultPhotoUploading] = useState(false);
+  const setVenuePhotoUrl = useCallback(
+    async (_venue, url) => {
+      if (!league) return;
+      setLeague((prev) => ({ ...prev, photo: url }));
+      try {
+        await setClubPhotoUrl(league.id, url);
+      } catch (e) {
+        setPhotoError("사진 저장에 실패했어요. 권한이 있는 계정인지 확인해 주세요.");
+      }
+    },
+    [league]
+  );
+
+  const toggleVenueAmenity = useCallback(
+    async (_venue, key) => {
+      if (!league) return;
+      const next = { ...(league.amenities || {}), [key]: !league.amenities?.[key] };
+      setLeague((prev) => ({ ...prev, amenities: next }));
+      try {
+        await updateClub(league.id, { amenities: next });
+      } catch (e) {
+        setSaveError(true);
+      }
+    },
+    [league]
+  );
 
   const uploadResultPhoto = useCallback(
     async (file) => {
       if (!league) return;
       setResultPhotoUploading(true);
+      const previewUrl = URL.createObjectURL(file);
+      setLeague((prev) => ({ ...prev, resultPhoto: previewUrl }));
       try {
-        const dataUrl = await resizeImageFile(file, 1000);
-        await persist({ ...league, resultPhoto: dataUrl });
+        const url = await uploadResultPhotoToStorage(league.id, file);
+        setLeague((prev) => ({ ...prev, resultPhoto: url }));
       } catch (e) {
-        // couldn't read the file
+        setSaveError(true);
       } finally {
         setResultPhotoUploading(false);
       }
@@ -723,119 +687,106 @@ export default function PadelLeagueApp() {
     [league]
   );
 
-  const setResultPhotoUrl = useCallback(
-    (url) => {
+  const setResultPhotoUrlHandler = useCallback(
+    async (url) => {
       if (!league) return;
-      persist({ ...league, resultPhoto: url });
+      setLeague((prev) => ({ ...prev, resultPhoto: url }));
+      try {
+        await setResultPhotoUrl(league.id, url);
+      } catch (e) {
+        setSaveError(true);
+      }
     },
     [league]
   );
 
-  const persistMembers = useCallback(async (next) => {
-    setMembers(next);
-    await storageSetWithRetry(MEMBERS_KEY, JSON.stringify(next));
-  }, []);
-
-  const loginAs = useCallback(async (memberId) => {
-    setCurrentMemberId(memberId);
-    try {
-      window.localStorage?.setItem(CURRENT_MEMBER_KEY, memberId);
-    } catch (e) {
-      // best effort
-    }
-  }, []);
-
-  const logout = useCallback(async () => {
-    setCurrentMemberId(null);
-    try {
-      window.localStorage?.removeItem(CURRENT_MEMBER_KEY);
-    } catch (e) {
-      // best effort
-    }
-  }, []);
-
-  const signUp = useCallback(
-    async ({ name, username, password, phone, email, gender, region, level, photo }) => {
-      const normalizedUsername = (username || "").trim().toLowerCase();
-      if (members.some((m) => (m.username || "").toLowerCase() === normalizedUsername)) {
-        return { error: "duplicate_username" };
-      }
-      const passwordHash = await hashPassword(password);
-      const member = {
-        id: uid(),
-        name,
-        username: normalizedUsername,
-        passwordHash,
-        phone: phone || "",
-        email: email || "",
-        gender: gender || "",
-        region: region || "",
-        level,
-        photo: photo || null,
-        createdAt: Date.now(),
-      };
-      const next = [...members, member];
-      await persistMembers(next);
-      await loginAs(member.id);
-      if (league && !league.players.some((p) => p.id === member.id)) {
-        persist({ ...league, players: [...league.players, { id: member.id, name: member.name }] });
-      }
-      return member;
-    },
-    [members, persistMembers, loginAs, league]
-  );
-
-  const loginWithPassword = useCallback(
-    async (username, password) => {
-      const normalizedUsername = (username || "").trim().toLowerCase();
-      const member = members.find((m) => (m.username || "").toLowerCase() === normalizedUsername);
-      if (!member) return { error: "not_found" };
-      const passwordHash = await hashPassword(password);
-      if (passwordHash !== member.passwordHash) return { error: "wrong_password" };
-      await loginAs(member.id);
-      return member;
-    },
-    [members, loginAs]
-  );
-
   const updateProfilePhoto = useCallback(
     async (file) => {
-      if (!currentMemberId) return;
+      if (!currentMember) return;
       setProfileUploading(true);
       try {
-        const dataUrl = await resizeImageFile(file, 400);
-        // Update local state first so the avatar appears immediately.
-        const next = members.map((m) => (m.id === currentMemberId ? { ...m, photo: dataUrl } : m));
-        setMembers(next);
-        await storageSetWithRetry(MEMBERS_KEY, JSON.stringify(next));
+        const url = await uploadAvatar(currentMember.id, file);
+        setCurrentMember((prev) => ({ ...prev, photo: url }));
       } catch (e) {
-        // couldn't read the file
+        // couldn't read/upload the file
       } finally {
         setProfileUploading(false);
       }
     },
-    [currentMemberId, members]
+    [currentMember]
   );
 
   const updateProfilePhotoUrl = useCallback(
-    (url) => {
-      if (!currentMemberId) return;
-      const next = members.map((m) => (m.id === currentMemberId ? { ...m, photo: url } : m));
-      persistMembers(next);
+    async (url) => {
+      if (!currentMember) return;
+      setCurrentMember((prev) => ({ ...prev, photo: url }));
+      try {
+        await setAvatarUrl(currentMember.id, url);
+      } catch (e) {
+        // best effort
+      }
     },
-    [currentMemberId, members, persistMembers]
+    [currentMember]
   );
 
   const updateProfileLevel = useCallback(
-    (level) => {
-      if (!currentMemberId) return;
-      const next = members.map((m) => (m.id === currentMemberId ? { ...m, level } : m));
-      persistMembers(next);
+    async (level) => {
+      if (!currentMember) return;
+      setCurrentMember((prev) => ({ ...prev, level }));
+      try {
+        await updateProfileLevelInDb(currentMember.id, level);
+      } catch (e) {
+        // best effort
+      }
     },
-    [currentMemberId, members, persistMembers]
+    [currentMember]
   );
 
-  const currentMember = members.find((m) => m.id === currentMemberId) || null;
+  /* ---------------------------------------------------------------
+     Auth
+  --------------------------------------------------------------- */
+  const signUp = useCallback(
+    async ({ name, username, password, phone, email, gender, region, level, photo }) => {
+      const result = await signUpWithUsername({ username, password, name, phone, email, gender, region, level, photoUrl: photo });
+      if (result.error) {
+        return { error: result.error.message === "duplicate_username" ? "duplicate_username" : result.error.message };
+      }
+      const profile = await getCurrentProfile();
+      setCurrentMember(mapProfile(profile));
+
+      if (league) {
+        try {
+          await joinClubAsPlayer(league.id, result.user.id);
+        } catch (e) {
+          // best effort; RLS or race — not fatal to signup itself
+        }
+        await reloadClubData(league.id);
+      } else {
+        const club = await createClub(result.user.id, { venue: VENUES[0] });
+        await reloadClubData(club.id);
+      }
+      return { user: result.user };
+    },
+    [league, reloadClubData]
+  );
+
+  const loginWithPassword = useCallback(async (username, password) => {
+    const result = await signInWithUsername(username, password);
+    if (result.error) return { error: result.error.message };
+    const profile = await getCurrentProfile();
+    setCurrentMember(mapProfile(profile));
+    const club = await getMyClub(result.user.id);
+    if (club) {
+      const [players, rounds, bookings] = await Promise.all([getClubPlayers(club.id), getRounds(club.id), getBookings(club.id)]);
+      setLeague(assembleLeague(club, players, rounds, bookings));
+    }
+    return { user: result.user };
+  }, []);
+
+  const logout = useCallback(async () => {
+    await signOut();
+    setCurrentMember(null);
+  }, []);
 
   const handleShare = useCallback(async () => {
     const shareData = {
@@ -860,20 +811,28 @@ export default function PadelLeagueApp() {
     }
   }, []);
 
-  const [saveStatus, setSaveStatus] = useState("idle"); // idle | saving | saved | error
-
-  const persist = useCallback(async (next) => {
-    setLeague(next);
-    setSaveStatus("saving");
-    const res = await storageSetWithRetry(STORAGE_KEY, JSON.stringify(next));
-    if (!res) {
-      setSaveError(true);
-      setSaveStatus("error");
-    } else {
-      setSaveError(false);
-      setSaveStatus("saved");
-    }
-  }, []);
+  /* Small scalar club-field saves (name/venue) used directly from the
+     header's inline inputs. Format/court-count have their own handlers
+     below since they also need to touch matches. */
+  const persist = useCallback(
+    async (next) => {
+      if (!league) return;
+      setLeague(next);
+      setSaveStatus("saving");
+      const patch = {};
+      if (next.name !== league.name) patch.name = next.name;
+      if (next.venue !== league.venue) patch.venue = next.venue;
+      try {
+        if (Object.keys(patch).length) await updateClub(league.id, patch);
+        setSaveError(false);
+        setSaveStatus("saved");
+      } catch (e) {
+        setSaveError(true);
+        setSaveStatus("error");
+      }
+    },
+    [league]
+  );
 
   const nameOf = useCallback(
     (id) => {
@@ -956,7 +915,7 @@ export default function PadelLeagueApp() {
     }
   }, [league]);
 
-  if (loading || !league) {
+  if (loading) {
     return (
       <div
         style={{
@@ -974,21 +933,71 @@ export default function PadelLeagueApp() {
     );
   }
 
-  const addPlayer = () => {
+  if (!league) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+          alignItems: "center",
+          justifyContent: "center",
+          background: C.paper,
+          fontFamily: "'Pretendard Variable', sans-serif",
+          color: C.charcoal,
+          padding: 20,
+          textAlign: "center",
+        }}
+      >
+        <div>아직 만들어진 클럽이 없어요.</div>
+        <PrimaryButton onClick={() => setAuthModalOpen(true)}>회원가입하고 클럽 만들기</PrimaryButton>
+        {authModalOpen && (
+          <AuthModal
+            members={[{}]}
+            currentMember={currentMember}
+            onLoginWithPassword={loginWithPassword}
+            onLogout={logout}
+            onSignUp={signUp}
+            onUploadProfilePhoto={updateProfilePhoto}
+            onSetProfilePhotoUrl={updateProfilePhotoUrl}
+            onUpdateLevel={updateProfileLevel}
+            profileUploading={profileUploading}
+            onClose={() => setAuthModalOpen(false)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  const addPlayer = async () => {
     const name = newPlayerName.trim();
     if (!name) return;
-    persist({ ...league, players: [...league.players, { id: uid(), name }] });
     setNewPlayerName("");
+    try {
+      const player = await addGuestPlayer(league.id, name);
+      setLeague((prev) => ({ ...prev, players: [...prev.players, player] }));
+    } catch (e) {
+      setSaveError(true);
+    }
   };
 
-  const removePlayer = (id) => {
-    persist({
-      ...league,
-      players: league.players.filter((p) => p.id !== id),
-      teams: league.teams.filter((t) => !t.playerIds.includes(id)),
-    });
+  const removePlayer = async (id) => {
+    setLeague((prev) => ({
+      ...prev,
+      players: prev.players.filter((p) => p.id !== id),
+      teams: prev.teams.filter((t) => !t.playerIds.includes(id)),
+    }));
+    try {
+      await removeClubMember(league.id, id);
+    } catch (e) {
+      setSaveError(true);
+    }
   };
 
+  // Round-robin team pairing is a session-local preview only, kept in
+  // React state and not yet written to Supabase — see README.md
+  // ("알려진 제한사항") for why and what finishing it would take.
   const autoAssignTeams = () => {
     const shuffled = [...league.players].sort(() => Math.random() - 0.5);
     const teams = [];
@@ -1000,29 +1009,38 @@ export default function PadelLeagueApp() {
         playerIds: pair.map((p) => p.id),
       });
     }
-    persist({ ...league, teams });
+    setLeague((prev) => ({ ...prev, teams }));
   };
 
-  const generateSchedule = () => {
-    if (league.format === "americano") {
-      if (league.players.length < 4) return;
-      const rounds = generateAmericanoRounds(league.players, league.courtCount, numRounds);
-      persist({ ...league, rounds });
-    } else if (league.format === "mexicano") {
-      if (league.players.length < 4) return;
-      const roundData = generateMexicanoRound(league.players, [], league.courtCount);
-      if (roundData) {
-        persist({ ...league, rounds: [{ roundNumber: 1, matches: roundData.matches, sitOut: roundData.sitOut }] });
+  const generateSchedule = async () => {
+    try {
+      if (league.format === "americano") {
+        if (league.players.length < 4) return;
+        const rounds = generateAmericanoRounds(league.players, league.courtCount, numRounds);
+        await replaceAllRounds(league.id, rounds);
+        setLeague((prev) => ({ ...prev, rounds }));
+      } else if (league.format === "mexicano") {
+        if (league.players.length < 4) return;
+        const roundData = generateMexicanoRound(league.players, [], league.courtCount);
+        if (roundData) {
+          const rounds = [{ roundNumber: 1, matches: roundData.matches, sitOut: roundData.sitOut }];
+          await replaceAllRounds(league.id, rounds);
+          setLeague((prev) => ({ ...prev, rounds }));
+        }
+      } else {
+        if (league.teams.length < 2) return;
+        const rounds = generateRoundRobinRounds(league.teams, league.courtCount);
+        // Not yet persisted to Supabase for round-robin (team ids
+        // aren't real player ids) — local-only for this session.
+        setLeague((prev) => ({ ...prev, rounds }));
       }
-    } else {
-      if (league.teams.length < 2) return;
-      const rounds = generateRoundRobinRounds(league.teams, league.courtCount);
-      persist({ ...league, rounds });
+      setTab("schedule");
+    } catch (e) {
+      setSaveError(true);
     }
-    setTab("schedule");
   };
 
-  const generateNextMexicanoRound = () => {
+  const generateNextMexicanoRound = async () => {
     if (league.players.length < 4) return;
     const roundData = generateMexicanoRound(league.players, league.rounds, league.courtCount);
     if (!roundData) return;
@@ -1031,32 +1049,103 @@ export default function PadelLeagueApp() {
       matches: roundData.matches,
       sitOut: roundData.sitOut,
     };
-    persist({ ...league, rounds: [...league.rounds, newRound] });
+    try {
+      await appendRound(league.id, newRound);
+      setLeague((prev) => ({ ...prev, rounds: [...prev.rounds, newRound] }));
+    } catch (e) {
+      setSaveError(true);
+    }
   };
 
-  const removeLastMexicanoRound = () => {
-    persist({ ...league, rounds: league.rounds.slice(0, -1) });
+  const removeLastMexicanoRound = async () => {
+    const last = league.rounds[league.rounds.length - 1];
+    if (!last) return;
+    try {
+      await removeLastRound(league.id, last.roundNumber);
+      setLeague((prev) => ({ ...prev, rounds: prev.rounds.slice(0, -1) }));
+    } catch (e) {
+      setSaveError(true);
+    }
   };
 
-  const updateScore = (roundIdx, matchId, field, value) => {
-    const rounds = league.rounds.map((round, ri) => {
-      if (ri !== roundIdx) return round;
-      return {
-        ...round,
-        matches: round.matches.map((m) => (m.id === matchId ? { ...m, [field]: value } : m)),
-      };
-    });
-    persist({ ...league, rounds });
+  const updateScore = async (roundIdx, matchId, field, value) => {
+    setLeague((prev) => ({
+      ...prev,
+      rounds: prev.rounds.map((round, ri) =>
+        ri !== roundIdx
+          ? round
+          : { ...round, matches: round.matches.map((m) => (m.id === matchId ? { ...m, [field]: value } : m)) }
+      ),
+    }));
+    if (league.format === "round_robin") return; // local-only, see note above
+    try {
+      await updateMatchScore(matchId, field, value);
+    } catch (e) {
+      setSaveError(true);
+    }
   };
 
-  const setFormat = (format) => {
+  const setFormat = async (format) => {
     if (format === league.format) return;
-    persist({ ...league, format, rounds: [] });
+    setLeague((prev) => ({ ...prev, format, rounds: [] }));
+    try {
+      await updateClub(league.id, { format });
+      if (format !== "round_robin") await replaceAllRounds(league.id, []);
+    } catch (e) {
+      setSaveError(true);
+    }
   };
 
-  const resetLeague = () => {
-    persist(defaultLeague());
+  const handleCourtCountChange = async (v) => {
+    setLeague((prev) => ({ ...prev, courtCount: v }));
+    try {
+      await updateClub(league.id, { courtCount: v });
+    } catch (e) {
+      setSaveError(true);
+    }
   };
+
+  const resetLeague = async () => {
+    try {
+      await clearAllMatches(league.id);
+      setLeague((prev) => ({ ...prev, rounds: [] }));
+    } catch (e) {
+      setSaveError(true);
+    }
+  };
+
+  const handleJoinSlot = async ({ date, time, court, category, duration, existing }, participant) => {
+    try {
+      if (existing) {
+        if (existing.players.length >= BOOKING_SLOTS_PER_MATCH) return;
+        await joinBookingGroup(league.id, existing.groupId, participant);
+      } else {
+        const startIdx = TIME_SLOTS.indexOf(time);
+        const times = Array.from({ length: duration }, (_, k) => TIME_SLOTS[startIdx + k]);
+        await createBookingGroup(league.id, { court, date, times, category, participant });
+      }
+      const bookings = await getBookings(league.id);
+      setLeague((prev) => ({ ...prev, bookings }));
+    } catch (e) {
+      setSaveError(true);
+    }
+  };
+
+  const handleRemoveParticipant = async (existing, participantId) => {
+    const player = existing.players.find((p) => p.id === participantId);
+    if (!player) return;
+    const isMember = league.players.some((p) => p.id === participantId);
+    try {
+      await removeBookingParticipant(league.id, existing.groupId, isMember ? { profileId: participantId } : { name: player.name });
+      const bookings = await getBookings(league.id);
+      setLeague((prev) => ({ ...prev, bookings }));
+    } catch (e) {
+      setSaveError(true);
+    }
+  };
+
+  const venuePhotos = { [league.venue]: league.photo };
+  const venueAmenities = { [league.venue]: league.amenities };
 
   const tabs = [
     { key: "booking", label: "코트 예약", icon: Grid3x3 },
@@ -1179,12 +1268,9 @@ export default function PadelLeagueApp() {
               active={league.format === "round_robin"}
               onClick={() => setFormat("round_robin")}
               label="라운드로빈 · 팀전"
-              tooltip="처음에 정한 고정 팀끼리 서로 한 번씩 맞붙는 리그전 방식이에요."
+              tooltip="처음에 정한 고정 팀끼리 서로 한 번씩 맞붙는 리그전 방식이에요. (이 형식은 아직 이 기기에만 저장돼요)"
             />
-            <CourtStepper
-              value={league.courtCount}
-              onChange={(v) => persist({ ...league, courtCount: v })}
-            />
+            <CourtStepper value={league.courtCount} onChange={handleCourtCountChange} />
             <div style={{ flex: 1 }} />
             {currentMember ? (
               <button
@@ -1279,7 +1365,8 @@ export default function PadelLeagueApp() {
         {tab === "booking" && (
           <BookingTab
             league={league}
-            persist={persist}
+            onJoinSlot={handleJoinSlot}
+            onRemoveParticipant={handleRemoveParticipant}
             venuePhotos={venuePhotos}
             onUploadPhoto={uploadVenuePhoto}
             onSetPhotoUrl={setVenuePhotoUrl}
@@ -1323,7 +1410,7 @@ export default function PadelLeagueApp() {
             league={league}
             standings={standings}
             onUploadResultPhoto={uploadResultPhoto}
-            onSetResultPhotoUrl={setResultPhotoUrl}
+            onSetResultPhotoUrl={setResultPhotoUrlHandler}
             resultPhotoUploading={resultPhotoUploading}
           />
         )}
@@ -1331,7 +1418,7 @@ export default function PadelLeagueApp() {
         <div style={{ marginTop: 40, textAlign: "center" }}>
           <button
             onClick={() => {
-              if (window.confirm("현재 리그 데이터를 모두 지우고 새로 시작할까요?")) resetLeague();
+              if (window.confirm("이번 시즌의 대진표를 모두 지우고 새로 시작할까요? (선수·클럽 정보는 유지돼요)")) resetLeague();
             }}
             style={{
               background: "transparent",
@@ -1342,11 +1429,11 @@ export default function PadelLeagueApp() {
               textDecoration: "underline",
             }}
           >
-            새 리그로 초기화
+            새 시즌으로 초기화
           </button>
           {saveError && (
             <div style={{ marginTop: 8, fontSize: 12, color: C.danger }}>
-              저장에 실패했어요. 네트워크를 확인하고 다시 시도해 주세요.
+              저장에 실패했어요. 클럽 관리자 권한이 있는 계정으로 로그인했는지 확인해 주세요.
             </div>
           )}
         </div>
@@ -1354,7 +1441,7 @@ export default function PadelLeagueApp() {
 
       {authModalOpen && (
         <AuthModal
-          members={members}
+          members={currentMember ? [] : [{}]}
           currentMember={currentMember}
           onLoginWithPassword={loginWithPassword}
           onLogout={logout}
@@ -1562,7 +1649,8 @@ function AuthModal({
   const [gender, setGender] = useState("");
   const [region, setRegion] = useState("");
   const [level, setLevel] = useState(3.0);
-  const [signupPhoto, setSignupPhoto] = useState(null);
+  const [signupPhoto, setSignupPhoto] = useState(null); // preview: object URL or pasted URL
+  const [signupPhotoFile, setSignupPhotoFile] = useState(null); // raw File, uploaded after account exists
   const [signupError, setSignupError] = useState("");
 
   const [loginUsername, setLoginUsername] = useState("");
@@ -1596,11 +1684,20 @@ function AuthModal({
       gender,
       region,
       level,
-      photo: signupPhoto,
+      // A pasted URL can be saved immediately; a picked file needs a
+      // real account to exist first, so it's uploaded just below instead.
+      photo: signupPhotoFile ? null : signupPhoto,
     });
     if (result && result.error === "duplicate_username") {
       setSignupError("이미 사용 중인 아이디예요.");
       return;
+    }
+    if (result && result.error) {
+      setSignupError("가입에 실패했어요. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
+    if (signupPhotoFile) {
+      await onUploadProfilePhoto(signupPhotoFile);
     }
     setMode("profile");
   };
@@ -1775,15 +1872,14 @@ function AuthModal({
               <PhotoInput
                 label="프로필 사진"
                 uploading={false}
-                onFile={async (file) => {
-                  try {
-                    const dataUrl = await resizeImageFile(file, 400);
-                    setSignupPhoto(dataUrl);
-                  } catch (e) {
-                    // couldn't read the file
-                  }
+                onFile={(file) => {
+                  setSignupPhotoFile(file);
+                  setSignupPhoto(URL.createObjectURL(file));
                 }}
-                onSetUrl={(url) => setSignupPhoto(url)}
+                onSetUrl={(url) => {
+                  setSignupPhotoFile(null);
+                  setSignupPhoto(url);
+                }}
               />
             </div>
 
@@ -2141,7 +2237,8 @@ function SectionCard({ children }) {
 
 function BookingTab({
   league,
-  persist,
+  onJoinSlot,
+  onRemoveParticipant,
   venuePhotos,
   onUploadPhoto,
   onSetPhotoUrl,
@@ -2195,36 +2292,14 @@ function BookingTab({
 
   const joinSlot = () => {
     if (!activeSlot) return;
-    const name = guestName.trim() || league.players.find((p) => p.id === joinPlayerId)?.name;
+    const chosenPlayer = league.players.find((p) => p.id === joinPlayerId);
+    const name = guestName.trim() || chosenPlayer?.name;
     if (!name) return;
     const { date, time, court } = activeSlot;
     const existing = findBooking(date, time, court);
-    const participant = { id: uid(), name };
+    const participant = { profileId: guestName.trim() ? null : chosenPlayer?.id, name };
 
-    let bookings;
-    if (existing) {
-      if (existing.players.length >= BOOKING_SLOTS_PER_MATCH) return;
-      const groupId = existing.groupId;
-      bookings = league.bookings.map((b) =>
-        (groupId ? b.groupId === groupId : b === existing) ? { ...b, players: [...b.players, participant] } : b
-      );
-    } else {
-      const startIdx = TIME_SLOTS.indexOf(time);
-      const groupId = uid();
-      const newSlots = Array.from({ length: duration }, (_, k) => ({
-        id: uid(),
-        groupId,
-        venue: league.venue,
-        date,
-        time: TIME_SLOTS[startIdx + k],
-        court,
-        category,
-        durationHours: duration,
-        players: [participant],
-      }));
-      bookings = [...(league.bookings || []), ...newSlots];
-    }
-    persist({ ...league, bookings });
+    onJoinSlot({ date, time, court, category, duration, existing }, participant);
     setGuestName("");
     setJoinPlayerId(league.players[0]?.id || "");
   };
@@ -2234,16 +2309,8 @@ function BookingTab({
     const { date, time, court } = activeSlot;
     const existing = findBooking(date, time, court);
     if (!existing) return;
-    const groupId = existing.groupId;
-    const inGroup = (b) => (groupId ? b.groupId === groupId : b === existing);
-    const players = existing.players.filter((p) => p.id !== participantId);
-    const bookings =
-      players.length === 0
-        ? league.bookings.filter((b) => !inGroup(b))
-        : league.bookings.map((b) => (inGroup(b) ? { ...b, players } : b));
-    persist({ ...league, bookings });
+    onRemoveParticipant(existing, participantId);
   };
-
 
   const courts = Array.from({ length: league.courtCount }, (_, i) => i + 1);
   const activeBooking = activeSlot && findBooking(activeSlot.date, activeSlot.time, activeSlot.court);
